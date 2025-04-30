@@ -1,18 +1,214 @@
-// User.java
-package com.example.demo.model;
+package com.example.staff_service.services;
+
+import com.example.staff_service.dto.StaffDTO;
+import com.example.staff_service.entities.StaffModel;
+import com.example.staff_service.interfaces.IStaffService;
+import com.example.staff_service.repository.StaffRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@Service
+public class StaffService implements IStaffService {
+    @Autowired
+    private StaffRepository staffRepository;
+
+    @Override
+    public StaffDTO createStaff(StaffDTO staff) {
+        StaffModel staffModel = convertToStaffModel(staff);
+        staffRepository.save(staffModel);
+        return staff;
+    }
+
+    @Override
+    public List<StaffDTO> findByRole(String role) {
+        List<StaffModel> staffModels = staffRepository.findByRole(role);
+        return staffModels.stream()
+                .map(this::convertToStaffDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Optional<StaffDTO> findById(Long empId) {
+        return Optional.ofNullable(staffRepository.findByEmpId(empId))
+                .map(this::convertToStaffDTO);
+    }
+
+    @Override
+    public StaffDTO updateById(Long id, StaffDTO staffDTO) {
+        StaffModel staffModel = staffRepository.findByEmpId(id);
+        if (staffModel != null) {
+            staffModel.setJoined(staffDTO.getJoined());
+            staffModel.setName(staffDTO.getName());
+            staffModel.setRole(staffDTO.getRole());
+            staffRepository.save(staffModel);
+            return convertToStaffDTO(staffModel);
+        }
+        return null; // Or throw an exception
+    }
+
+    @Override
+    public boolean deleteById(Long id) {
+        if (staffRepository.findByEmpId(id) == null) {
+            return false;
+        }
+        staffRepository.deleteByEmpId(id);
+        return true;
+    }
+
+    private StaffModel convertToStaffModel(StaffDTO staff) {
+        return new StaffModel(staff.getRole(), staff.getSalary(), staff.getJoined(), staff.getName(), staff.getEmpId());
+    }
+
+    private StaffDTO convertToStaffDTO(StaffModel staff) {
+        return new StaffDTO(staff.getId(), staff.getRole(), staff.getSalary(), staff.getJoined(), staff.getName(), staff.getEmpID());
+    }
+}
+package com.example.staff_service.repository;
+
+import com.example.staff_service.entities.StaffModel;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface StaffRepository extends JpaRepository<StaffModel, Long> {
+    List<StaffModel> findByRole(String role);
+    StaffModel findByEmpId(Long empId);
+    void deleteByEmpId(Long empId);
+}
+package com.example.staff_service.entities;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 
+import java.time.LocalDate;
+
 @Entity
-public class User {
+public class StaffModel {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private String username;
-    private String password;
+
+    public Long getEmpID() {
+        return empID;
+    }
+
+    public void setEmpID(Long empID) {
+        this.empID = empID;
+    }
+
+    private Long empID;
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+    public String getRole() {
+        return role;
+    }
+    public StaffModel(){
+
+    }
+    public StaffModel(String role, Long salary, LocalDate joined, String name,Long empID) {
+        this.role = role;
+        this.salary = salary;
+        this.joined = joined;
+        this.name = name;
+        this.empID=empID;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
+    }
+
+    public Long getSalary() {
+        return salary;
+    }
+
+    public void setSalary(Long salary) {
+        this.salary = salary;
+    }
+
+    public LocalDate getJoined() {
+        return joined;
+    }
+
+    public void setJoined(LocalDate joined) {
+        this.joined = joined;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    private String role;
+    private Long  salary;
+    private LocalDate joined;
+    private String name;
+}
+package com.example.staff_service.dto;
+
+import java.time.LocalDate;
+
+public class StaffDTO {
+    private Long id;
+    private Long empId;
+
+    public Long getEmpId() {
+        return empId;
+    }
+
+    public void setEmpId(Long empId) {
+        this.empId = empId;
+    }
+
+    public String getRole() {
+        return role;
+    }
+    public StaffDTO(){
+
+    }
+    public StaffDTO(Long id,String role, Long salary, LocalDate joined, String name,Long empId) {
+        this.id=id;
+        this.role = role;
+        this.salary = salary;
+        this.joined = joined;
+        this.name = name;
+        this.empId=empId;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
+    }
+
+    public Long getSalary() {
+        return salary;
+    }
+
+    public void setSalary(Long salary) {
+        this.salary = salary;
+    }
+
+    public LocalDate getJoined() {
+        return joined;
+    }
+
+    public void setJoined(LocalDate joined) {
+        this.joined = joined;
+    }
 
     public Long getId() {
         return id;
@@ -22,282 +218,53 @@ public class User {
         this.id = id;
     }
 
-    public String getUsername() {
-        return username;
+    public String getName() {
+        return name;
     }
 
-    public void setUsername(String username) {
-        this.username = username;
+    public void setName(String name) {
+        this.name = name;
     }
 
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
+    private String role;
+    private Long  salary;
+    private LocalDate joined;
+    private String name;
 }
+package com.example.staff_service.controller;
 
-// UserRepository.java
-package com.example.demo.repository;
-
-import com.example.demo.model.User;
-import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.Optional;
-
-public interface UserRepository extends JpaRepository<User, Long> {
-    Optional<User> findByUsername(String username);
-}
-
-// JwtUtil.java
-package com.example.demo.util;
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import org.springframework.stereotype.Component;
-
-import java.util.Date;
-
-@Component
-public class JwtUtil {
-    private String secret = "yourSecretKey";
-    private long expiration = 86400000;
-
-    public String generateToken(String username) {
-        return Jwts.builder()
-                .setSubject(username)
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + expiration))
-                .signWith(SignatureAlgorithm.HS512, secret)
-                .compact();
-    }
-
-    public String getUsernameFromToken(String token) {
-        Claims claims = Jwts.parser()
-                .setSigningKey(secret)
-                .parseClaimsJws(token)
-                .getBody();
-        return claims.getSubject();
-    }
-
-    public boolean validateToken(String token) {
-        try {
-            Jwts.parser().setSigningKey(secret).parseClaimsJws(token);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-}
-
-// SecurityConfig.java
-package com.example.demo.config;
-
-import com.example.demo.filter.JwtFilter;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
-@Configuration
-@EnableWebSecurity
-public class SecurityConfig {
-
-    private final JwtFilter jwtFilter;
-
-    public SecurityConfig(JwtFilter jwtFilter) {
-        this.jwtFilter = jwtFilter;
-    }
-
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf().disable()
-                .authorizeHttpRequests()
-                .requestMatchers("/auth/register", "/auth/login").permitAll()
-                .anyRequest().authenticated()
-                .and()
-                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
-
-        http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-        return http.build();
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
-        return authenticationConfiguration.getAuthenticationManager();
-    }
-}
-
-// JwtFilter.java
-package com.example.demo.filter;
-
-import com.example.demo.util.JwtUtil;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
-import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter;
-
-import java.io.IOException;
-
-@Component
-public class JwtFilter extends OncePerRequestFilter {
-
-    private final JwtUtil jwtUtil;
-    private final UserDetailsService userDetailsService;
-
-    public JwtFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService) {
-        this.jwtUtil = jwtUtil;
-        this.userDetailsService = userDetailsService;
-    }
-
-    @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
-        String authHeader = request.getHeader("Authorization");
-        String token = null;
-        String username = null;
-
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            token = authHeader.substring(7);
-            username = jwtUtil.getUsernameFromToken(token);
-        }
-
-        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-            if (jwtUtil.validateToken(token)) {
-                UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
-            }
-        }
-
-        filterChain.doFilter(request, response);
-    }
-}
-
-// AuthController.java
-package com.example.demo.controller;
-
-import com.example.demo.model.User;
-import com.example.demo.repository.UserRepository;
-import com.example.demo.util.JwtUtil;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import com.example.staff_service.dto.StaffDTO;
+import com.example.staff_service.interfaces.IStaffService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.convert.PeriodUnit;
 import org.springframework.web.bind.annotation.*;
 
-@RestController
-@RequestMapping("/auth")
-public class AuthController {
-
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final AuthenticationManager authenticationManager;
-    private final JwtUtil jwtUtil;
-
-    public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder,
-                          AuthenticationManager authenticationManager, JwtUtil jwtUtil) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.authenticationManager = authenticationManager;
-        this.jwtUtil = jwtUtil;
-    }
-
-    @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody User user) {
-        if (userRepository.findByUsername(user.getUsername()).isPresent()) {
-            return ResponseEntity.badRequest().body("Username already exists");
-        }
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
-        userRepository.save(user);
-        return ResponseEntity.ok("User registered successfully");
-    }
-
-    @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody User user) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(user.getUsername(), user.getPassword()));
-        String token = jwtUtil.generateToken(user.getUsername());
-        return ResponseEntity.ok(token);
-    }
-}
-
-// RoomController.java
-package com.example.demo.controller;
-
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import java.util.List;
 
 @RestController
-@RequestMapping("/room")
-public class RoomController {
+@RequestMapping("/staff")
+public class StaffControllers {
+    @Autowired
+    private IStaffService staffService;
+    @DeleteMapping("/{Id}")
+    public Boolean delteById(@PathVariable Long Id){
+        return staffService.deleteById(Id);
+    }
 
-    @GetMapping("/get")
-    public String getRoom() {
-        return "Room data";
+    @PutMapping("/{id}")
+    public StaffDTO updateById(@PathVariable Long id,@RequestBody StaffDTO staffDTO){
+        return staffService.updateById(id,staffDTO);
+    }
+    @GetMapping("/{id}")
+    public StaffDTO getEmpById(@PathVariable Long id){
+        return staffService.findbyid(id);
+    }
+    @GetMapping("/{role}")
+    public List<StaffDTO> getByRole(@PathVariable String role){
+        return staffService.findbyrole(role);
+    }
+    @PostMapping("/addStaff")
+    public StaffDTO create(StaffDTO staffDTO){
+        return staffService.createStaff(staffDTO);
     }
 }
-
-// CustomUserDetailsService.java
-package com.example.demo.service;
-
-import com.example.demo.model.User;
-import com.example.demo.repository.UserRepository;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.stereotype.Service;
-
-import java.util.ArrayList;
-
-@Service
-public class CustomUserDetailsService implements UserDetailsService {
-
-    private final UserRepository userRepository;
-
-    public CustomUserDetailsService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
-
-    @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
-        return new org.springframework.security.core.userdetails.User(
-                user.getUsername(), user.getPassword(), new ArrayList<>());
-    }
-}
-
-// application.properties
-spring.datasource.url=jdbc:h2:mem:testdb
-spring.datasource.driverClassName=org.h2.Driver
-spring.datasource.username=sa
-spring.datasource.password=
-spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
-spring.h2.console.enabled=true
