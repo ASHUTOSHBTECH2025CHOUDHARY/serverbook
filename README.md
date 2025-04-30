@@ -1,3 +1,47 @@
+package com.example.staff_service.controller;
+
+import com.example.staff_service.dto.StaffDTO;
+import com.example.staff_service.interfaces.IStaffService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/staff")
+public class StaffControllers {
+
+    @Autowired
+    private IStaffService staffService;
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Boolean> deleteById(@PathVariable Long id) {
+        return ResponseEntity.ok(staffService.deleteById(id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<StaffDTO> updateById(@PathVariable Long id, @RequestBody StaffDTO staffDTO) {
+        return ResponseEntity.ok(staffService.updateById(id, staffDTO));
+    }
+
+    @GetMapping("/id/{id}")
+    public ResponseEntity<StaffDTO> getEmpById(@PathVariable Long id) {
+        return staffService.findById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/role/{role}")
+    public ResponseEntity<List<StaffDTO>> getByRole(@PathVariable String role) {
+        return ResponseEntity.ok(staffService.findByRole(role));
+    }
+
+    @PostMapping("/addStaff")
+    public ResponseEntity<StaffDTO> create(@RequestBody StaffDTO staffDTO) {
+        return ResponseEntity.ok(staffService.createStaff(staffDTO));
+    }
+}
 package com.example.staff_service.services;
 
 import com.example.staff_service.dto.StaffDTO;
@@ -13,59 +57,74 @@ import java.util.stream.Collectors;
 
 @Service
 public class StaffService implements IStaffService {
-    @Autowired
-    private StaffRepository staffRepository;
 
-    @Override
-    public StaffDTO createStaff(StaffDTO staff) {
-        StaffModel staffModel = convertToStaffModel(staff);
-        staffRepository.save(staffModel);
-        return staff;
-    }
+    @Autowired
+    private StaffRepository staffRepository;
 
-    @Override
-    public List<StaffDTO> findByRole(String role) {
-        List<StaffModel> staffModels = staffRepository.findByRole(role);
-        return staffModels.stream()
-                .map(this::convertToStaffDTO)
-                .collect(Collectors.toList());
-    }
+    @Override
+    public StaffDTO createStaff(StaffDTO staff) {
+        StaffModel staffModel = convertToStaffModel(staff);
+        staffRepository.save(staffModel);
+        return staff;
+    }
 
-    @Override
-    public Optional<StaffDTO> findById(Long empId) {
-        return Optional.ofNullable(staffRepository.findByEmpId(empId))
-                .map(this::convertToStaffDTO);
-    }
+    @Override
+    public List<StaffDTO> findByRole(String role) {
+        List<StaffModel> staffModels = staffRepository.findByRole(role);
+        return staffModels.stream()
+                .map(this::convertToStaffDTO)
+                .collect(Collectors.toList());
+    }
 
-    @Override
-    public StaffDTO updateById(Long id, StaffDTO staffDTO) {
-        StaffModel staffModel = staffRepository.findByEmpId(id);
-        if (staffModel != null) {
-            staffModel.setJoined(staffDTO.getJoined());
-            staffModel.setName(staffDTO.getName());
-            staffModel.setRole(staffDTO.getRole());
-            staffRepository.save(staffModel);
-            return convertToStaffDTO(staffModel);
-        }
-        return null; // Or throw an exception
-    }
+    @Override
+    public Optional<StaffDTO> findById(Long empId) {
+        return Optional.ofNullable(staffRepository.findByEmpId(empId))
+                .map(this::convertToStaffDTO);
+    }
 
-    @Override
-    public boolean deleteById(Long id) {
-        if (staffRepository.findByEmpId(id) == null) {
-            return false;
-        }
-        staffRepository.deleteByEmpId(id);
-        return true;
-    }
+    @Override
+    public StaffDTO updateById(Long id, StaffDTO staffDTO) {
+        StaffModel staffModel = staffRepository.findByEmpId(id);
+        if (staffModel != null) {
+            staffModel.setJoined(staffDTO.getJoined());
+            staffModel.setName(staffDTO.getName());
+            staffModel.setRole(staffDTO.getRole());
+            staffRepository.save(staffModel);
+            return convertToStaffDTO(staffModel);
+        }
+        return null;
+    }
 
-    private StaffModel convertToStaffModel(StaffDTO staff) {
-        return new StaffModel(staff.getRole(), staff.getSalary(), staff.getJoined(), staff.getName(), staff.getEmpId());
-    }
+    @Override
+    public boolean deleteById(Long id) {
+        if (staffRepository.findByEmpId(id) == null) {
+            return false;
+        }
+        staffRepository.deleteByEmpId(id);
+        return true;
+    }
 
-    private StaffDTO convertToStaffDTO(StaffModel staff) {
-        return new StaffDTO(staff.getId(), staff.getRole(), staff.getSalary(), staff.getJoined(), staff.getName(), staff.getEmpID());
-    }
+    private StaffModel convertToStaffModel(StaffDTO staff) {
+        return new StaffModel(staff.getRole(), staff.getSalary(), staff.getJoined(), staff.getName(), staff.getEmpId());
+    }
+
+    private StaffDTO convertToStaffDTO(StaffModel staff) {
+        return new StaffDTO(staff.getId(), staff.getRole(), staff.getSalary(), staff.getJoined(), staff.getName(), staff.getEmpID());
+    }
+}
+package com.example.staff_service.interfaces;
+
+import com.example.staff_service.dto.StaffDTO;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface IStaffService {
+    StaffDTO createStaff(StaffDTO staffDTO);
+    List<StaffDTO> findByRole(String role);
+    Optional<StaffDTO> findById(Long empId);
+    StaffDTO updateById(Long id, StaffDTO staffDTO);
+    boolean deleteById(Long id);
 }
 package com.example.staff_service.repository;
 
@@ -77,194 +136,155 @@ import java.util.List;
 
 @Repository
 public interface StaffRepository extends JpaRepository<StaffModel, Long> {
-    List<StaffModel> findByRole(String role);
-    StaffModel findByEmpId(Long empId);
-    void deleteByEmpId(Long empId);
+    List<StaffModel> findByRole(String role);
+    StaffModel findByEmpId(Long empId);
+    void deleteByEmpId(Long empId);
 }
 package com.example.staff_service.entities;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 
 import java.time.LocalDate;
 
 @Entity
 public class StaffModel {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-    public Long getEmpID() {
-        return empID;
-    }
+    private Long empID;
+    private String role;
+    private Long salary;
+    private LocalDate joined;
+    private String name;
 
-    public void setEmpID(Long empID) {
-        this.empID = empID;
-    }
+    public StaffModel() {}
 
-    private Long empID;
-    public Long getId() {
-        return id;
-    }
+    public StaffModel(String role, Long salary, LocalDate joined, String name, Long empID) {
+        this.role = role;
+        this.salary = salary;
+        this.joined = joined;
+        this.name = name;
+        this.empID = empID;
+    }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
-    public String getRole() {
-        return role;
-    }
-    public StaffModel(){
+    public Long getId() {
+        return id;
+    }
 
-    }
-    public StaffModel(String role, Long salary, LocalDate joined, String name,Long empID) {
-        this.role = role;
-        this.salary = salary;
-        this.joined = joined;
-        this.name = name;
-        this.empID=empID;
-    }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public void setRole(String role) {
-        this.role = role;
-    }
+    public Long getEmpID() {
+        return empID;
+    }
 
-    public Long getSalary() {
-        return salary;
-    }
+    public void setEmpID(Long empID) {
+        this.empID = empID;
+    }
 
-    public void setSalary(Long salary) {
-        this.salary = salary;
-    }
+    public String getRole() {
+        return role;
+    }
 
-    public LocalDate getJoined() {
-        return joined;
-    }
+    public void setRole(String role) {
+        this.role = role;
+    }
 
-    public void setJoined(LocalDate joined) {
-        this.joined = joined;
-    }
+    public Long getSalary() {
+        return salary;
+    }
 
-    public String getName() {
-        return name;
-    }
+    public void setSalary(Long salary) {
+        this.salary = salary;
+    }
 
-    public void setName(String name) {
-        this.name = name;
-    }
+    public LocalDate getJoined() {
+        return joined;
+    }
 
-    private String role;
-    private Long  salary;
-    private LocalDate joined;
-    private String name;
+    public void setJoined(LocalDate joined) {
+        this.joined = joined;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
 }
 package com.example.staff_service.dto;
 
 import java.time.LocalDate;
 
 public class StaffDTO {
-    private Long id;
-    private Long empId;
+    private Long id;
+    private Long empId;
+    private String role;
+    private Long salary;
+    private LocalDate joined;
+    private String name;
 
-    public Long getEmpId() {
-        return empId;
-    }
+    public StaffDTO() {
+    }
 
-    public void setEmpId(Long empId) {
-        this.empId = empId;
-    }
+    public StaffDTO(Long id, String role, Long salary, LocalDate joined, String name, Long empId) {
+        this.id = id;
+        this.role = role;
+        this.salary = salary;
+        this.joined = joined;
+        this.name = name;
+        this.empId = empId;
+    }
 
-    public String getRole() {
-        return role;
-    }
-    public StaffDTO(){
+    public Long getId() {
+        return id;
+    }
 
-    }
-    public StaffDTO(Long id,String role, Long salary, LocalDate joined, String name,Long empId) {
-        this.id=id;
-        this.role = role;
-        this.salary = salary;
-        this.joined = joined;
-        this.name = name;
-        this.empId=empId;
-    }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public void setRole(String role) {
-        this.role = role;
-    }
+    public Long getEmpId() {
+        return empId;
+    }
 
-    public Long getSalary() {
-        return salary;
-    }
+    public void setEmpId(Long empId) {
+        this.empId = empId;
+    }
 
-    public void setSalary(Long salary) {
-        this.salary = salary;
-    }
+    public String getRole() {
+        return role;
+    }
 
-    public LocalDate getJoined() {
-        return joined;
-    }
+    public void setRole(String role) {
+        this.role = role;
+    }
 
-    public void setJoined(LocalDate joined) {
-        this.joined = joined;
-    }
+    public Long getSalary() {
+        return salary;
+    }
 
-    public Long getId() {
-        return id;
-    }
+    public void setSalary(Long salary) {
+        this.salary = salary;
+    }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    public LocalDate getJoined() {
+        return joined;
+    }
 
-    public String getName() {
-        return name;
-    }
+    public void setJoined(LocalDate joined) {
+        this.joined = joined;
+    }
 
-    public void setName(String name) {
-        this.name = name;
-    }
+    public String getName() {
+        return name;
+    }
 
-    private String role;
-    private Long  salary;
-    private LocalDate joined;
-    private String name;
-}
-package com.example.staff_service.controller;
-
-import com.example.staff_service.dto.StaffDTO;
-import com.example.staff_service.interfaces.IStaffService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.convert.PeriodUnit;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-
-@RestController
-@RequestMapping("/staff")
-public class StaffControllers {
-    @Autowired
-    private IStaffService staffService;
-    @DeleteMapping("/{Id}")
-    public Boolean delteById(@PathVariable Long Id){
-        return staffService.deleteById(Id);
-    }
-
-    @PutMapping("/{id}")
-    public StaffDTO updateById(@PathVariable Long id,@RequestBody StaffDTO staffDTO){
-        return staffService.updateById(id,staffDTO);
-    }
-    @GetMapping("/{id}")
-    public StaffDTO getEmpById(@PathVariable Long id){
-        return staffService.findbyid(id);
-    }
-    @GetMapping("/{role}")
-    public List<StaffDTO> getByRole(@PathVariable String role){
-        return staffService.findbyrole(role);
-    }
-    @PostMapping("/addStaff")
-    public StaffDTO create(StaffDTO staffDTO){
-        return staffService.createStaff(staffDTO);
-    }
+    public void setName(String name) {
+        this.name = name;
+    }
 }
