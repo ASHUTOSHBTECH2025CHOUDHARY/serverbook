@@ -1,290 +1,184 @@
-package com.example.staff_service.controller;
+spring.application.name=API-GATEWAY
+server.port=8089
 
-import com.example.staff_service.dto.StaffDTO;
-import com.example.staff_service.interfaces.IStaffService;
+spring.cloud.gateway.routes[0].id=Authservice
+spring.cloud.gateway.routes[0].uri=lb://Authservice
+spring.cloud.gateway.routes[0].predicates[0]=Path= /auth/**
+
+spring.cloud.gateway.routes[1].id=Room-Service
+spring.cloud.gateway.routes[1].uri=lb://Room-Service
+spring.cloud.gateway.routes[1].predicates[0]=Path= /room/**
+
+spring.cloud.gateway.routes[2].id=Booking-Service
+spring.cloud.gateway.routes[2].uri=lb://Booking-Service
+spring.cloud.gateway.routes[2].predicates[0]=Path= /booking/**, /guest/**
+
+spring.cloud.gateway.routes[3].id=Staff-service
+spring.cloud.gateway.routes[3].uri=lb://Staff-service
+spring.cloud.gateway.routes[3].predicates[0]=Path= /staff/**
+spring.cloud.gateway.discovery.locator.enabled=true
+package com.example.ApiGateway;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class ApiGatewayApplication {
+	public static void main(String[] args) {
+		SpringApplication.run(ApiGatewayApplication.class, args);
+	}
+}package com.example.ApiGateway.security;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+@Component
+public class JwtUtil {
+
+    private final String SECRET ="mysecretkeylfkjgdflkgjdlfgjdlfgjdlfgjdlfgjldfgjldfgjldfgjldfgjdlfjldlfflflflfflflflsliroer";
+
+
+    public Claims validateToken(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(SECRET.getBytes())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+            System.out.println("JWT validated successfully. Claims: " + claims);
+            return claims;
+        } catch (Exception e) {
+            System.err.println("JWT validation failed: " + e.getMessage());
+            throw new RuntimeException("Invalid token: " + e.getMessage(), e);
+        }
+    }
+}package com.example.ApiGateway.security;
+
+import com.example.ApiGateway.filter.AuthFilter;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.web.server.authentication.AuthenticationWebFilter;
+import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository;
+//import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository.
+import io.jsonwebtoken.Claims;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.ReactiveAuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
+import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.WebFilter;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
+import java.util.Collections;
+import java.util.function.Function;
 
-@RestController
-@RequestMapping("/staff")
-public class StaffControllers {
+@Configuration
+@EnableWebFluxSecurity
+public class JwtConfig {
 
-    @Autowired
-    private IStaffService staffService;
+    @Autowired
+    private JwtUtil jwtUtil;
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Boolean> deleteById(@PathVariable Long id) {
-        return ResponseEntity.ok(staffService.deleteById(id));
-    }
+    @Bean
+    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+        AuthenticationWebFilter jwtAuthFilter=new AuthenticationWebFilter(authenticationManager());
+        jwtAuthFilter.setAuthenticationConverter(authenticationConverter());
+        return http
+                .csrf().disable() // Disable CSRF for API gateway
+                .authorizeExchange()
+                .pathMatchers("/auth/**").permitAll()
+                .pathMatchers(HttpMethod.GET, "/room/**").hasAuthority("RECEPTION")
+                .pathMatchers("/room/**").hasAuthority("ADMIN")
+                .pathMatchers(HttpMethod.GET, "/booking/**", "/guest/**").hasAuthority("RECEPTION")
+                .pathMatchers("/booking/**", "/guest/**").hasAuthority("ADMIN")
+                .anyExchange().authenticated()
+                .and()
+                .authenticationManager(authenticationManager())
+                .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
+                .addFilterAt(jwtAuthFilter, SecurityWebFiltersOrder.AUTHENTICATION)
+                .build();
+    }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<StaffDTO> updateById(@PathVariable Long id, @RequestBody StaffDTO staffDTO) {
-        return ResponseEntity.ok(staffService.updateById(id, staffDTO));
-    }
+    @Bean
+    public ReactiveAuthenticationManager authenticationManager() {
+        return authentication -> {
+            String token = authentication.getCredentials().toString();
+            try {
+                Claims claims = jwtUtil.validateToken(token);
+                String role = claims.get("role", String.class);
+                System.out.println("Authenticated user: " + claims.getSubject() + ", Role: " + role);
+                return Mono.just(new UsernamePasswordAuthenticationToken(
+                        claims.getSubject(),
+                        null,
+                        Collections.singletonList(new SimpleGrantedAuthority(role))
+                ));
+            } catch (Exception e) {
+                System.err.println("Authentication failed: " + e.getMessage());
+                return Mono.error(e);
+            }
+        };
+    }
 
-    @GetMapping("/id/{id}")
-    public ResponseEntity<StaffDTO> getEmpById(@PathVariable Long id) {
-        return staffService.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
+    @Bean
+    public Function<ServerWebExchange, Mono<Authentication>> authenticationConverter() {
+        return exchange -> {
+            String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String token = authHeader.substring(7);
+                System.out.println("Extracted JWT token: " + token);
+                return Mono.just(new UsernamePasswordAuthenticationToken(token, token));
+            }
+            System.out.println("No valid Authorization header found");
+            return Mono.empty();
+        };
+    }
 
-    @GetMapping("/role/{role}")
-    public ResponseEntity<List<StaffDTO>> getByRole(@PathVariable String role) {
-        return ResponseEntity.ok(staffService.findByRole(role));
-    }
+    @Bean
+    public WebFilter authFilter() {
+        return new AuthFilter();
+    }
+}package com.example.ApiGateway.filter;
 
-    @PostMapping("/addStaff")
-    public ResponseEntity<StaffDTO> create(@RequestBody StaffDTO staffDTO) {
-        return ResponseEntity.ok(staffService.createStaff(staffDTO));
-    }
-}
-package com.example.staff_service.services;
-
-import com.example.staff_service.dto.StaffDTO;
-import com.example.staff_service.entities.StaffModel;
-import com.example.staff_service.interfaces.IStaffService;
-import com.example.staff_service.repository.StaffRepository;
+import com.example.ApiGateway.security.JwtUtil;
+import io.jsonwebtoken.Claims;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
+import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.WebFilter;
+import org.springframework.web.server.WebFilterChain;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
+public class AuthFilter implements WebFilter {
 
-@Service
-public class StaffService implements IStaffService {
+    @Autowired
+    private JwtUtil jwtUtil;
 
-    @Autowired
-    private StaffRepository staffRepository;
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+        String path = exchange.getRequest().getURI().getPath();
+        String method = exchange.getRequest().getMethod().name();
+        System.out.println("Request Path: " + path);
+        System.out.println("Request Method: " + method);
+        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        System.out.println("Authorization Header: " + authHeader);
 
-    @Override
-    public StaffDTO createStaff(StaffDTO staff) {
-        StaffModel staffModel = convertToStaffModel(staff);
-        staffRepository.save(staffModel);
-        return staff;
-    }
-
-    @Override
-    public List<StaffDTO> findByRole(String role) {
-        List<StaffModel> staffModels = staffRepository.findByRole(role);
-        return staffModels.stream()
-                .map(this::convertToStaffDTO)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public Optional<StaffDTO> findById(Long empId) {
-        return Optional.ofNullable(staffRepository.findByEmpId(empId))
-                .map(this::convertToStaffDTO);
-    }
-
-    @Override
-    public StaffDTO updateById(Long id, StaffDTO staffDTO) {
-        StaffModel staffModel = staffRepository.findByEmpId(id);
-        if (staffModel != null) {
-            staffModel.setJoined(staffDTO.getJoined());
-            staffModel.setName(staffDTO.getName());
-            staffModel.setRole(staffDTO.getRole());
-            staffRepository.save(staffModel);
-            return convertToStaffDTO(staffModel);
-        }
-        return null;
-    }
-
-    @Override
-    public boolean deleteById(Long id) {
-        if (staffRepository.findByEmpId(id) == null) {
-            return false;
-        }
-        staffRepository.deleteByEmpId(id);
-        return true;
-    }
-
-    private StaffModel convertToStaffModel(StaffDTO staff) {
-        return new StaffModel(staff.getRole(), staff.getSalary(), staff.getJoined(), staff.getName(), staff.getEmpId());
-    }
-
-    private StaffDTO convertToStaffDTO(StaffModel staff) {
-        return new StaffDTO(staff.getId(), staff.getRole(), staff.getSalary(), staff.getJoined(), staff.getName(), staff.getEmpID());
-    }
-}
-package com.example.staff_service.interfaces;
-
-import com.example.staff_service.dto.StaffDTO;
-
-import java.util.List;
-import java.util.Optional;
-
-public interface IStaffService {
-    StaffDTO createStaff(StaffDTO staffDTO);
-    List<StaffDTO> findByRole(String role);
-    Optional<StaffDTO> findById(Long empId);
-    StaffDTO updateById(Long id, StaffDTO staffDTO);
-    boolean deleteById(Long id);
-}
-package com.example.staff_service.repository;
-
-import com.example.staff_service.entities.StaffModel;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-import java.util.List;
-
-@Repository
-public interface StaffRepository extends JpaRepository<StaffModel, Long> {
-    List<StaffModel> findByRole(String role);
-    StaffModel findByEmpId(Long empId);
-    void deleteByEmpId(Long empId);
-}
-package com.example.staff_service.entities;
-
-import jakarta.persistence.*;
-
-import java.time.LocalDate;
-
-@Entity
-public class StaffModel {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    private Long empID;
-    private String role;
-    private Long salary;
-    private LocalDate joined;
-    private String name;
-
-    public StaffModel() {}
-
-    public StaffModel(String role, Long salary, LocalDate joined, String name, Long empID) {
-        this.role = role;
-        this.salary = salary;
-        this.joined = joined;
-        this.name = name;
-        this.empID = empID;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public Long getEmpID() {
-        return empID;
-    }
-
-    public void setEmpID(Long empID) {
-        this.empID = empID;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
-
-    public Long getSalary() {
-        return salary;
-    }
-
-    public void setSalary(Long salary) {
-        this.salary = salary;
-    }
-
-    public LocalDate getJoined() {
-        return joined;
-    }
-
-    public void setJoined(LocalDate joined) {
-        this.joined = joined;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-}
-package com.example.staff_service.dto;
-
-import java.time.LocalDate;
-
-public class StaffDTO {
-    private Long id;
-    private Long empId;
-    private String role;
-    private Long salary;
-    private LocalDate joined;
-    private String name;
-
-    public StaffDTO() {
-    }
-
-    public StaffDTO(Long id, String role, Long salary, LocalDate joined, String name, Long empId) {
-        this.id = id;
-        this.role = role;
-        this.salary = salary;
-        this.joined = joined;
-        this.name = name;
-        this.empId = empId;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public Long getEmpId() {
-        return empId;
-    }
-
-    public void setEmpId(Long empId) {
-        this.empId = empId;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
-
-    public Long getSalary() {
-        return salary;
-    }
-
-    public void setSalary(Long salary) {
-        this.salary = salary;
-    }
-
-    public LocalDate getJoined() {
-        return joined;
-    }
-
-    public void setJoined(LocalDate joined) {
-        this.joined = joined;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
+        return ReactiveSecurityContextHolder.getContext()
+                .map(context -> context.getAuthentication())
+                .flatMap(auth -> {
+                    System.out.println("Authenticated User: " + auth.getName() + ", Authorities: " + auth.getAuthorities());
+                    return chain.filter(exchange);
+                })
+                .switchIfEmpty(chain.filter(exchange)); // Proceed if no authentication
+    }
 }
